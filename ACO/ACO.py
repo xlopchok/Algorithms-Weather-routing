@@ -93,8 +93,21 @@ class ACO():
         max_feromon = 50,
         ro_start = 0.5,
         ro_end = 0.8, 
-        
     ):
+        '''
+        grid - сетка на основе которой создается граф, нужна для востановаления реального положения точек
+        desript_graph - набор ребер с их описанием
+        start_index - индекс в сетке соответствующий начальной точке
+        end_index - индекс в сетке соответствующий конечной точке
+        count_try_get_path - кол-во попыток найти какой-ниубудь путь от начала до конца, при одном вызове функции создания маршрута для муравья
+        max_count_points_in_path - максимальное кол-во точек в пути
+        alpha - это степень феромонов, при получении вероятностей выбора ребра
+        beta - это степень стоимости пройти по ребру, при получении вероятностей выбора ребра
+        min_feromon - минимальное значение феромонов на ребре в графе
+        max_feromon - максимальное значение феромонов на ребре в графе
+        ro_start - коэффициент испарения феромонов на первых эпохах (кол-во первых эпох выбирается при запуске функции поиска маршрута)
+        ro_end - коэффициент испарения феромонов на последних эпохах
+        '''
         self.grid = grid
         self.desript_graph = desript_graph
         self.start_index = start_index
@@ -111,6 +124,9 @@ class ACO():
         self.best_path = None
       
     def create_path_for_one_ant(self):
+        '''
+        Функция которая ищет маршрут для одного муравья
+        '''
         path_one_ant = []
         for curr_iter in range(self.count_try_get_path):
             path_one_ant.clear()
@@ -145,6 +161,9 @@ class ACO():
 
     # Функция подсчета характеристик полученного маршрута
     def dist_time_meanBF_rang_path(self, path_one_ant):
+        '''
+        Используя описание ребер в графе, возвращает характеристики маршрута
+        '''
         time = sum([
             self.desript_graph[path_one_ant[i]][path_one_ant[i+1]]['distance'] / self.desript_graph[path_one_ant[i]][path_one_ant[i+1]]['speed']
             for i in range(len(path_one_ant) - 1)
@@ -167,9 +186,19 @@ class ACO():
         all_pathes = False,
         dist_degree = 2,
     ):
+        '''
+        count_path_for_epoch - кол-во маршрутов которое строится во время последних эпох
+        start_count_path_for_epoch - кол-во маршрутов которое строится на первых эпохах (может занимать много времени, до тех пор пока феромоны не распределны)
+        start_epochs - кол-во эпох которые считаются первыми
+        epochs - кол-во последних эпох
+        Q - некоторая константа, в процессе выполнения алгоритма подбирается автоматически, стартовое значение может быть случайным
+        count_epoch_without_update - допустимое кол-во эпох без улучшения, если привышается, то алгоритм останавливается
+        all_pathes - условие на использование всех маршрутов, и тех что не дошли до конца, можно оптимизировать чтобы давался штраф на эти маршруты
+        dist_degree - степень вклада расстояния при оценке качества маршрута
+        '''
         epoch_without_updates = count_epoch_without_update
 
-        # Будем сохранять лучший путь         dist          time            fuel      rang
+        # Будем сохранять лучший путь             dist          time            fuel      rang
         self.best_path = {'path' : [], 'rang' : [float('inf'), float('inf') ,float('inf'), 0]}
         pathes = []
     
@@ -346,7 +375,10 @@ class ACO():
             )
         return self.best_path
         
-def visual_ACO_path(aco, start_point, end_point, Ocean_map = Ocean_map)
+def visual_ACO_path(aco, start_point, end_point, Ocean_map = Ocean_map):
+    '''
+    Создает визуализацию полученного, лучшего маршрута
+    '''
     m = folium.Map(tiles="cartodbpositron", world_copy_jump=True)
     
     group_1 = folium.FeatureGroup("first group").add_to(m)
