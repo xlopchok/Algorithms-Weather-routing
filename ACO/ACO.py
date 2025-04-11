@@ -325,7 +325,7 @@ class ACO():
                 time = self.best_path['rang'][1]
                 fuel = self.best_path['rang'][2]
                 rang = self.best_path['rang'][3]
-                os.makedirs('results_pathes', exist_ok=False)
+                os.makedirs('results_pathes', exist_ok=True)
                 
                 np.save(os.path.join('results_pathes', f'path_{dist:.1f}_{time:.1f}_{rang:.1f}_{fuel:.1f}.npy'), save_path)
             else:
