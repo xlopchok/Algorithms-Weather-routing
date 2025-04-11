@@ -1,4 +1,42 @@
+import os
+import sys
+import time
 import math
+
+import pandas as pd
+import numpy as np
+from numpy.linalg import norm
+
+import random
+
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+import geopandas as gpd
+
+import networkx as nx
+
+import folium
+from folium.plugins import MousePosition
+from folium import IFrame
+
+import requests
+
+import shapely
+from shapely.geometry import Point, MultiPoint, Polygon, MultiPolygon, LineString, MultiLineString
+from shapely.geometry import LinearRing
+from shapely.ops import unary_union
+from shapely.validation import make_valid
+
+from scipy.spatial import ConvexHull
+
+from tqdm import tqdm
+
+from datetime import datetime
+from datetime import timedelta
+
+from sklearn.cluster import OPTICS
+from sklearn.cluster import KMeans
 
 from maps.Ocean_map import Ocean_map
 from Weather_Map.Weather_map import weather_data, gpd_weather_data, extrimly_weather_data
@@ -281,4 +319,20 @@ def analys_path(
             type_work = type_work,
             weather_data = weather_data,
         )
+
+def nearest_data_in_weather_data(
+    weather_data = weather_data,
+    curr_time = datetime(year = 2020, day = 10, hour = 15, month = 1)
+):
+    '''
+    Ищет ближайшую дату к текущей среди тех данных о погоде которые есть
+    '''
+    datetime_arr = []
+    for i, date in enumerate(weather_data['valid_time'].unique()):
+        weathe_date_time = datetime(year = date.year , month = date.month, day = date.day, hour = date.hour)
+        datetime_arr.append(abs(weathe_date_time - curr_time))
+    
+    np.argmin(datetime_arr)
+    return weather_data['valid_time'].unique()[np.argmin(datetime_arr)]
+     
 
