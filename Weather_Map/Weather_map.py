@@ -255,5 +255,12 @@ def visual_weather_data_by_BF_and_time(
 
     m.save(map_file)
 
+def create_extrimly_weather_data(weather_data = weather_data):
+    extrimly_weather_data['BF'] = weather_data['BF'].map(lambda x : x if x < 5 else 7)
+    return extrimly_weather_data
+
+extrimly_weather_data = create_extrimly_weather_data()
+
 if __name__ == 'main':
     visual_weather_data_by_BF_and_time()
+    visual_weather_data_by_BF_and_time(weather_data = extrimly_weather_data, map_file = 'extrimly_BF_weather.html')
