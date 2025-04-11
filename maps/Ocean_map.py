@@ -1,26 +1,13 @@
-import os
-import sys
-import time
-import math
-
 import pandas as pd
 import numpy as np
-from numpy.linalg import norm
 
 import geopandas as gpd
-
-import random
 
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-import networkx as nx
-
 import folium
 from folium.plugins import MousePosition
-from folium import IFrame
-
-import requests
 
 import shapely
 from shapely.geometry import Point, MultiPoint, Polygon, MultiPolygon, LineString, MultiLineString
@@ -29,11 +16,6 @@ from shapely.ops import unary_union
 from shapely.validation import make_valid
 
 from scipy.spatial import ConvexHull
-
-from tqdm import tqdm
-
-from sklearn.cluster import OPTICS
-from sklearn.cluster import KMeans
 
 gybraaltar = Polygon([[-9.819256969557983, 38.95234633159242],
  [-12.924295990656333, 39.03395556554722],
@@ -493,7 +475,7 @@ def create_ocean_map(
 
 Ocean_map = create_ocean_map()
 
-def visualisation_Map():
+def visualisation_Map(Ocean_map = Ocean_map):
   m = folium.Map(tiles="cartodbpositron")
   
   folium.GeoJson(Ocean_map).add_to(m)
@@ -507,7 +489,7 @@ def visualisation_Map():
   return m
   
 if __name__ == "__main__":
-    map_object = visualisation_Map()
+    map_object = visualisation_Map(Ocean_map)
     map_file = "Ocean_map.html"
     map_object.save(map_file)
     webbrowser.open(map_file)
