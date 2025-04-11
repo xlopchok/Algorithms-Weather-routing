@@ -487,6 +487,16 @@ def visualisation_Map(Ocean_map = Ocean_map):
   
   MousePosition().add_to(m)
   return m
+
+def projection_to_boundary(point, Map = Ocean_map, alpha = 0.2):
+    min_distance = point.distance(Map)
+    circle_of_point = point.buffer(min_distance + alpha)
+    result_area = circle_of_point.intersection(Map)
+    result_point = result_area.centroid
+    if Map.contains(result_point):
+        return result_point
+    else:
+        return projection_to_boundary(result_point, Map = Map, alpha = 0.1 * alpha)
   
 if __name__ == "__main__":
     map_object = visualisation_Map(Ocean_map)
