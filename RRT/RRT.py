@@ -223,23 +223,49 @@ class RRT:
         self.path = np.array([[coords[1], coords[0]] for coords in shortest_path])
 
 
-def visualisations_pathes(Ocean_map = Ocean_map, pathes = pathes, map_file = "rrt_pathes.html"):
+def visualisations_pathes(
+    start_point = start_point, 
+    end_point = end_point, 
+    Ocean_map = Ocean_map, 
+    pathes = pathes, 
+    map_file = "rrt_pathes.html"
+):
     colors = ['red', 'green', 'blue', 'black', 'purple', 'orange', 'yellow']
     m = folium.Map(tiles="cartodbpositron")
     
     folium.GeoJson(Ocean_map).add_to(m)
-    
-    
+
     folium.Marker(start_point.coords[0][::-1], tooltip="inside_point").add_to(m)
     folium.Marker(end_point.coords[0][::-1], tooltip="outside_point").add_to(m)
+    
     for i, path in enumerate(pathes):
         folium.PolyLine(path, color = colors[i % len(colors)], weight = 5).add_to(m)
     folium.LayerControl().add_to(m)
     
     MousePosition().add_to(m)
     m.save(map_file)
-
-
+def visualisations_graph_and_path(
+    rrt, 
+    start_point = start_point, 
+    end_point = end_point, 
+    Ocean_map = Ocean_map,
+    map_file = 'RRT_path.html'
+):
+    m = folium.Map(tiles="cartodbpositron")
+    
+    folium.GeoJson(Ocean_map).add_to(m)
+    
+    folium.Marker(start_point.coords[0][::-1], tooltip="inside_point").add_to(m)
+    folium.Marker(end_point.coords[0][::-1], tooltip="outside_point").add_to(m)
+    
+    folium.GeoJson(MultiLineString(rrt.graph)).add_to(m)
+    folium.PolyLine(rrt.path, color = 'red', weight = 5).add_to(m)
+    
+    folium.LayerControl().add_to(m)
+    
+    MousePosition().add_to(m)
+    m.save(map_file)
+    
 if __name__ == "__main__":
     pathes = []
     for i in range(config['count_pathes']):
@@ -259,11 +285,34 @@ if __name__ == "__main__":
         rrt.RRT_find_path_in_graph()
         res_path = rrt.path
         np.save(f'{i+1}_rrt_path.npy', res_path)
+
+        visualisations_graph_and_path(
+            rrt, 
+            start_point = start_point, 
+            end_point = end_point, 
+            Ocean_map = Ocean_map,
+            map_file = f'{i + 1}_RRT_path.html'
+        )
         pathes.append(res_path)
-    visualisations_pathes(Ocean_map = config['Ocean_map'], pathes, map_file = 'rrt_pathes_before_smoothing.html')
+        
+    visualisations_pathes(
+        start_point = config['start_point'],
+        end_point = config['end_point'],
+        Ocean_map = config['Ocean_map'], 
+        pathes, 
+        map_file = 'rrt_pathes_before_smoothing.html'
+    )
+    
     for i, path in enumerate(pathes):
         new_path = smoothing_path(path, max_edge_dist = config['max_edge_dist'], Ocean_map = Ocean_map)
         pathes[i] = new_path
-    visualisations_pathes(Ocean_map = config['Ocean_map'], pathes, map_file = 'rrt_pathes_after_smoothing.html')
+        
+    visualisations_pathes(
+        start_point = config['start_point'],
+        end_point = config['end_point'],
+        Ocean_map = config['Ocean_map'], 
+        pathes, 
+        map_file = 'rrt_pathes_after_smoothing.html'
+    )
                           
     
