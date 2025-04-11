@@ -40,14 +40,38 @@ from sklearn.cluster import KMeans
 
 import xarray as xr
 
+config = {
+    'start_point' : Point((3, 55)),
+    'end_point' : Point((-80, 15)),
+    'file_path_wave' : 'january_2020.grib',
+    'file_path_wind' : 'wind_january_2020.grib',
+    'step_x' : 10,
+    'step_y' : 10,
+    'step' : 13,
+}
+
 def create_wethaer_map(
-    start_point = start_point, 
-    end_point = end_point,
-    file_path_wave = '/kaggle/input/weathedata/january_2020.grib',
-    file_path_wind = '/kaggle/input/weathedata/wind_january_2020.grib',
-    step_x = 10, step_y = 10,
-    step = 13
+    start_point, 
+    end_point,
+    file_path_wave = 'january_2020.grib',
+    file_path_wind = 'wind_january_2020.grib',
+    step_x = 10, 
+    step_y = 10,
+    step = 13,
 ):
+    '''
+    Для ограничения рабочей области создается минимальный прямоугольник содержащий начальную и конечну точки
+    step_x, step_y - расширяются этот прямоугольник
+
+    Для заполнения пропусков, используются среднии значения из области, определяемой параметром
+    step - определяет область из которой берутся значения для заполнения пропусков
+    '''
+    current_dir = os.path.dirname(__file__)
+    file_path_wave = os.path.join(current_dir, 'weather_data', 'file_path_wave')
+
+    current_dir = os.path.dirname(__file__)
+    file_path_wave = os.path.join(current_dir, 'weather_data', 'file_path_wind')
+    
     min_x, min_y, max_x, max_y =  LineString([start_point, end_point]).bounds
     
     max_x = np.round(max_x + step_x) + 1
@@ -60,19 +84,19 @@ def create_wethaer_map(
     wind_dataset = xr.open_dataset(file_path_wind, engine='cfgrib')
 
     # Преобразуем гриб в датафрейм данные о движении волн
-    weather_data = wave_dataset.to_dataframe().reset_index()
+    wave_data = wave_dataset.to_dataframe().reset_index()
 
     # Отберем только нужные точки и нужые колоник
-    weather_data = weather_data[
-    (min_y <= weather_data['latitude']) & 
-    (weather_data['latitude'] <= max_y) &
-    (min_x + 180 <= weather_data['longitude']) &
-    (weather_data['longitude'] <= max_x + 180) 
+    wave_data = wave_data[
+    (min_y <= wave_data['latitude']) & 
+    (wave_data['latitude'] <= max_y) &
+    (min_x + 180 <= wave_data['longitude']) &
+    (wave_data['longitude'] <= max_x + 180) 
     ].drop(columns = ['time', 'step', 'number', 'depthBelowSeaLayer', 'mswpt300m', 'oceanSurface', 'zos', 'sithick'])
 
-    # Обновим индексацию и добавим колонку
-    weather_data.index = range(len(weather_data))
-    weather_data['point'] = weather_data.apply(lambda x: Point(x['longitude'] - 180, x['latitude']), axis = 1)
+    # Обновим индексацию и добавим колонку point
+    wave_data.index = range(len(wave_data))
+    wave_data['point'] = wave_data.apply(lambda x: Point(x['longitude'] - 180, x['latitude']), axis = 1)
 
     # Преобразуем погодные данные о ветре из гриб в датафрейм
     wind_data = wind_dataset.to_dataframe().reset_index()
@@ -92,18 +116,18 @@ def create_wethaer_map(
     full_valid_time = set()
     
     for date in wind_data['valid_time'].unique():
-        if date in weather_data['valid_time'].unique():
+        if date in wave_data['valid_time'].unique():
             full_valid_time.add(date)
     
-    for date in weather_data['valid_time'].unique():
+    for date in wave_data['valid_time'].unique():
         if date in wind_data['valid_time'].unique():
             full_valid_time.add(date)
 
     # Выберем только те строки для которых дата имеется в обоих датафреймах
     wind_data = wind_data[wind_data['valid_time'].apply(lambda x : x in full_valid_time)]
-    weather_data = weather_data[weather_data['valid_time'].apply(lambda x : x in full_valid_time)]
+    wave_data = wave_data[wave_data['valid_time'].apply(lambda x : x in wave_data)]
     # Соеденим две таблицы
-    weather_data = pd.merge(weather_data, wind_data, on=['latitude', 'longitude', 'valid_time'], how='inner')
+    weather_data = pd.merge(wave_data, wind_data, on=['latitude', 'longitude', 'valid_time'], how='inner')
 
     # Уберем пропуски 
     while weather_data['uoe'].isna().sum() != 0 and weather_data['von'].isna().sum() != 0:
@@ -129,11 +153,13 @@ def create_wethaer_map(
         thresholds = [1 if x <= val else 0 for val in thresholds]
         if 1 in thresholds:
             return thresholds.index(1)
-        else: return 12
+        else: 
+            return 12
+            
     # Добавим число Баффорта
     weather_data['BF'] = weather_data['wind_speed'].apply(lambda x: BF_func(x))
 
-    # Для отрисовки преобразуем точки в квадраты
+    # Для отрисовки преобразуем точки в квадратные полигоны
     def point2polygon(point, step = 1.5):
         xy = point.coords[0]
         polygon = Polygon([
@@ -145,7 +171,89 @@ def create_wethaer_map(
         ])
         return polygon
 
-    # Сделаем колонки с квадратами
+    # Сделаем колонки с квадратными полигонами
     weather_data['polygon'] = weather_data['point'].apply(lambda x: point2polygon(x))
     
     return weather_data
+
+def safe_unary_union(geometries):
+    '''
+    Функция для объединения геометрий с использованием современных методов Shapely
+    Это позволяет вместо отрисовки большого числа объектов, отображать один объединненый объект
+    Также упрощает определния некоторых погдных параметров, например число Бофорта
+    '''
+    # Создаем список геометрий
+    geometries_list = [geom for g in geometries for geom in (g.geoms if hasattr(g, 'geoms') else [g])]
+    
+    # Объединяем их с помощью unary_union
+    res = unary_union(geometries_list)
+    if not res.is_valid:
+        res = make_valid(res)
+    return res
+
+weather_data = create_wethaer_map(**config)
+
+# Группировка и объединение
+group_by_BF_time_weather_data = (
+    weather_data.groupby(['valid_time', 'BF'])
+    .agg({'polygon': lambda x: safe_unary_union(x)})
+    .reset_index()
+)
+
+gpd_weather_data = gpd.GeoDataFrame(
+    group_by_BF_time_weather_data,
+    geometry = 'polygon',
+    crs = 'EPSG:4326'
+)
+
+def visual_weather_data_by_BF_and_time(
+    gpd_weather_data = gpd_weather_data,
+    map_file = 'BF_weather.html'
+):
+    FULL_GPD = []
+    for time_data in gpd_weather_data['valid_time'].unique():
+        GPD = gpd_weather_data[gpd_weather_data['valid_time'] == time_data].copy()
+        
+        GPD.index =  pd.Series(range(len(GPD)))
+        
+        GPD['valid_time_str'] = GPD['valid_time'].dt.strftime('%Y-%m-%d')
+        
+        GPD.drop('valid_time', axis = 1, inplace = True)
+        
+        GPD['cat'] = pd.Series(range(len(GPD)))
+    
+        FULL_GPD.append(GPD)
+
+    m = folium.Map(tiles="cartodbpositron", world_copy_jump=True)
+    
+    group_1 = folium.FeatureGroup("first group").add_to(m)
+    folium.GeoJson(Ocean_map).add_to(group_1)
+    
+    # Добавление слоя Choropleth
+    for i, GPD in enumerate(FULL_GPD):
+        folium.Choropleth(
+            geo_data=GPD.to_json(),
+            name = f'{i} weather map',
+            data=GPD,
+            columns=['cat', 'BF'],  # Используем колонку с временными метками
+            key_on='feature.id',  # Сопоставляем ID геометрий
+            fill_color='RdBu_r',
+            fill_opacity=0.8,
+            line_opacity=0.2,
+            # legend_name='Beaufort Force (BF)',
+            show = False,
+            highlight = True,
+            
+        ).add_to(m)
+
+    folium.Marker((start_point.coords[0][1], start_point.coords[0][0]), tooltip="start_point").add_to(m)
+    folium.Marker((end_point.coords[0][1], end_point.coords[0][0]), tooltip="end_point").add_to(m)
+    
+    folium.LayerControl().add_to(m)
+    
+    MousePosition().add_to(m)
+
+    m.save(map_file)
+
+if __name__ == 'main':
+    visual_weather_data_by_BF_and_time()
