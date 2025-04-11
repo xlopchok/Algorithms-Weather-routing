@@ -222,7 +222,6 @@ class RRT:
         
         self.path = np.array([[coords[1], coords[0]] for coords in shortest_path])
 
-
 def visualisations_pathes(
     start_point = start_point, 
     end_point = end_point, 
@@ -244,6 +243,7 @@ def visualisations_pathes(
     
     MousePosition().add_to(m)
     m.save(map_file)
+    
 def visualisations_graph_and_path(
     rrt, 
     start_point = start_point, 
