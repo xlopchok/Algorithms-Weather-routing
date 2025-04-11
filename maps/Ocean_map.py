@@ -492,4 +492,3 @@ if __name__ == "__main__":
     map_object = visualisation_Map(Ocean_map)
     map_file = "Ocean_map.html"
     map_object.save(map_file)
-    webbrowser.open(map_file)
