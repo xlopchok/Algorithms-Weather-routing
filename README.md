@@ -59,7 +59,7 @@ Algorithms-Weather-routing — это проект, посвящённый ра�
  ┃ ┗ 📄 sub_finctions.py
  ┣ 📂 Graph_map            # Генерация графа карты
  ┃ ┗ 📄 generate_graph.py
-┣ 📄 README.md             # Документация проекта
+ ┣ 📄 README.md             # Документация проекта
 ...
 ```
 
