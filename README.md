@@ -53,7 +53,7 @@ Algorithms-Weather-routing — это проект, посвящённый ра�
  ┃ ┗ 📄 Ocean_map.py
  ┣ 📂 Weather_Map          # Работа с погодными данными
  ┃ ┣ 📂 result_visual
- ┃ ┣ 📂 Weather_Map
+ ┃ ┣ 📂 Weather_data
  ┃ ┗ 📄 Weather_map.py
  ┣ 📂 sub_finctions        # Вспомогательные функции
  ┃ ┗ 📄 sub_finctions.py
