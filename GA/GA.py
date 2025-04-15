@@ -154,9 +154,9 @@ def Walk_mutauions(path, big_dist, curr_time_now = None, weather_data = None):
             curr_index += 1
     return new_path
 
-def Random_Walk_mutations(path, p_move, start_point = start_point, end_point = end_point, noise_step = 5, step_x = 10, step_y = 10):
+def Random_Walk_mutations(path, p_move, Ocean_map = Ocean_map, start_point = start_point, end_point = end_point, noise_step = 5, step_x = 10, step_y = 10, good_dist = 10):
     '''
-    Функция релизующуя мутаци Random_Walk_mutations, добавляет шум в маршруты, и сдвигает точки
+    Функция релизующуя мутаци Random_Walk_mutations, добавляет шум в маршруты, сдвигает точки, и добавляет новые
     path - рассматриваемый путь
     p_move - вероятность добавления шума
     start_point, end_point - начальная и конечная точки
@@ -169,7 +169,18 @@ def Random_Walk_mutations(path, p_move, start_point = start_point, end_point = e
             new_path.append(point)
             continue
         new_point = point.copy()
+        
         p_val = np.random.uniform()
+        # Добавление точки на отрезке, проверяем что длина отрезка больше допустимого
+        if haversine(new_point[1], new_point[0], new_path[-1][1], new_path[-1][0]) > 6 * good_dist and p_val < p_move:
+            middle_point = [(new_path[-1][0] + new_point[0]) / 2, (new_path[-1][1] + new_point[1]) / 2]
+            if Ocean_map.contains(LineString([middle_point, new_path[-1]])):
+                new_path.append(middle_point)
+            else: 
+                return []
+        
+        p_val = np.random.uniform()
+        # Добавление шума
         if p_val < p_move:
             rand_lon = np.random.uniform(-noise_step, noise_step)
             rand_lat = np.random.uniform(-noise_step, noise_step)
@@ -178,14 +189,18 @@ def Random_Walk_mutations(path, p_move, start_point = start_point, end_point = e
             new_point[1] += rand_lat
 
             if (
-                not Ocean_map.contains(Point(new_point)) or  # Если находится на суше
-                new_point[0] > max(start_point.coords[0][0], end_point.coords[0][0]) or # Если находится за перделами построенной погодной карты
-                new_point[1] > max(start_point.coords[0][1], end_point.coords[0][1]) or # Если находится за перделами построенной погодной карты
-                new_point[0] < min(start_point.coords[0][0], end_point.coords[0][0]) or # Если находится за перделами построенной погодной карты
-                new_point[1] < min(start_point.coords[0][1], end_point.coords[0][1])
+                not Ocean_map.contains(LineString([new_point, new_path[-1]])) or # Проверяем что новый отрезок находится в карте
+                new_point[0] > max(start_point.coords[0][0], end_point.coords[0][0]) + step_x or # Если находится за перделами построенной погодной карты
+                new_point[1] > max(start_point.coords[0][1], end_point.coords[0][1]) + step_y or # Если находится за перделами построенной погодной карты
+                new_point[0] < min(start_point.coords[0][0], end_point.coords[0][0]) - step_x or # Если находится за перделами построенной погодной карты
+                new_point[1] < min(start_point.coords[0][1], end_point.coords[0][1]) - step_y 
             ):
                 new_point = point.copy()
-        new_path.append(new_point)
+        
+        if Ocean_map.contains(LineString([new_point, new_path[-1]])):
+            new_path.append(new_point)
+        else:
+            return []
     return new_path
 
 def tournament_selection(curr_individs, num_winners=100, tournament_size=15, seed=None):
@@ -396,7 +411,19 @@ def GA(
         for path in tqdm(start_pathes, desc = f'epoch : {epoch + 1} Random_Walk_mutations, count_new pathes {len(new_pathes)}'):
             # Будем для каждого маршрутов создавать 2 его смещенных версии
             for _ in range(count_random_walk):
-                res_path = Random_Walk_mutations(path, p_move, start_point = start_point, end_point = end_point, noise_step = 5, step_x = step_x, step_y = step_y)
+                res_path = Random_Walk_mutations(
+                    path, 
+                    p_move, 
+                    Ocean_map = Ocean_map,
+                    start_point = start_point, 
+                    end_point = end_point, 
+                    noise_step = noise_step, 
+                    step_x = step_x, 
+                    step_y = step_y,
+                    good_dist = good_dist,
+                )
+                if len(res_path) == 0:
+                    continue
                 new_pathes.append(res_path)
 
         '''
