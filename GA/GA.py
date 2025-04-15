@@ -45,19 +45,6 @@ from maps.Ocean_map import Ocean_map
 from Weather_Map.Weather_map import weather_data, gpd_weather_data, extrimly_weather_data
 from sub_functions.subfunctions import haversine, smoothing_path, curr_speed_and_fuel, destination_point, analys_path, nearest_data_in_weather_data
 
-config = {
-    'start_point' : Point((3, 55)),
-    'end_point' : Point((-80, 15)),
-    'pathes_dir' : 'results_pathes',
-    'Ocean_map' : Ocean_map,
-    'epochs' : 50,  
-    'max_count_indeividuals' : 25, 
-    'p_1_point' : 0.15, 
-    'p_2_point' : 0.15, 
-    'p_skip_candidate' : 0.9
-}
-
-
 def One_point_Crossover(path1, path2, p_1_point = 0.2, good_dist = 10):
     '''
     Функция реализует скрещивание двух путей по одной точке,
@@ -167,12 +154,14 @@ def Walk_mutauions(path, big_dist, curr_time_now = None, weather_data = None):
             curr_index += 1
     return new_path
 
-def Random_Walk_mutations(path, p_move, noise_step = 5):
+def Random_Walk_mutations(path, p_move, start_point = start_point, end_point = end_point, noise_step = 5, step_x = 10, step_y = 10):
     '''
     Функция релизующуя мутаци Random_Walk_mutations, добавляет шум в маршруты, и сдвигает точки
     path - рассматриваемый путь
     p_move - вероятность добавления шума
+    start_point, end_point - начальная и конечная точки
     noise_step - максимальное допустимое смещение точки по координатам
+    step_x, step_y - параметры исплользованные для создания погодной карты, используется для контроля за положением новых точек
     '''
     new_path = []
     for index, point in enumerate(path):
@@ -188,13 +177,77 @@ def Random_Walk_mutations(path, p_move, noise_step = 5):
             new_point[0] += rand_lon
             new_point[1] += rand_lat
 
-            if not Ocean_map.contains(Point(new_point)):
+            if (
+                not Ocean_map.contains(Point(new_point)) or  # Если находится на суше
+                new_point[0] > max(start_point.coords[0][0], end_point.coords[0][0]) or # Если находится за перделами построенной погодной карты
+                new_point[1] > max(start_point.coords[0][1], end_point.coords[0][1]) or # Если находится за перделами построенной погодной карты
+                new_point[0] < min(start_point.coords[0][0], end_point.coords[0][0]) or # Если находится за перделами построенной погодной карты
+                new_point[1] < min(start_point.coords[0][1], end_point.coords[0][1])
+            ):
                 new_point = point.copy()
         new_path.append(new_point)
     return new_path
+
+def tournament_selection(curr_individs, num_winners=100, tournament_size=15, seed=None):
+    '''
+    Функция реализует турнирную селекцию
+    curr_individs - текущие представители
+    num_winners - кол-во элементов после отбора
+    tournament_size- кол-во участников в одном турнире
+    seed - можно установить для воспроизводимости результатов
+    '''
+    if seed is not None:
+        np.random.seed(seed)
     
+    arr = np.array(range(len(curr_individs)))
+    winners = []
+    
+    if num_winners > len(curr_individs):
+        return curr_individs
+        
+    for _ in range(num_winners):
+        if len(arr) == 0:
+            return [curr_individs[index] for index in winners]
+            
+        if tournament_size > len(arr):
+            tournament_size = int(0.8 * len(arr))
+            if tournament_size == 0:
+                tournament_size = 1
+        # выбираем случайно `tournament_size` элементов
+        indices = np.random.choice(len(arr), tournament_size, replace=False)
+        tournament = arr[indices]
+        
+        winner_index = indices[np.argmin([curr_individs[index]['rang'] for index in indices])]
+        
+        # добавляем победителя
+        winners.append(arr[winner_index])
+        
+        # удаляем его из массива, чтобы не повторялся
+        arr = np.delete(arr, winner_index)
+
+    return [curr_individs[index] for index in winners]
+
+def roulette_wheel_selection(curr_individs, num_select, replace = True, seed=None):
+    '''
+    Функция реализует селекцию с выбором элемента по вероятности, зависящей от значения 
+    curr_individs - текущие представители
+    num_select - кол-во элементов после отбора
+    replace - разрешение на выбор одинаковых элементов
+    seed - можно установаить для воспроизводимости результатов
+    '''
+    if seed is not None:
+        np.random.seed(seed)
+
+    arr = np.array([1 / np.exp(individ['rang']) for individ in curr_individs])
+    probs = arr / np.sum(arr)
+    
+    selected_indices = np.random.choice(len(arr), size = num_select, replace = replace, p = probs)
+    return [curr_individs[index] for index in selected_indices]
+
 def GA(
-    pathes_dir = 'start_populations',
+    start_point = start_point,
+    end_point = end_point,
+    pathes_dir = '/kaggle/working/',
     type_work = 'const_fuel',
     p_1_point = 0.2, # Вероятность добавить маршрут после OnePointCrossover
     p_2_point = 0.5, # Вероятность добавить маршрут после Two Point Crossover
@@ -209,7 +262,17 @@ def GA(
     count_random_walk = 5, # Сколько раз к одному маршруту применятьеся Random Walk
     p_skip_candidate = 0.5, # Вероятность выживания к моменту селекции
     curr_time_now = None, 
-    weather_data = None
+    weather_data = None,
+    dist_coef = 9e-3,
+    time_coef = 4e-2,
+    fuel_coef = 5e-2,
+    num_winners = 100,
+    tournament_size = 15,
+    seed = None,
+    replace = False,
+    step_x = 10, 
+    step_y = 10,
+    top_k = 5,
 ):
     '''
     Генетический алгоритм
@@ -228,8 +291,14 @@ def GA(
     p_skip_candidate - Вероятность выживания к моменту селекции
     curr_time_now - текущий момент времени
     weather_data - погодные данные
+    dist_coef, time_coef, fuel_coef - коэффициенты для оценки качества маршрутов
+    num_winners - кол-во выбранных элементов после турнирной селекции
+    seed - можно установить для воспроизводимости результатов
+    replace - разрешение на повтроение элементов при селекции основанной на вероятности выбрать тот или иной элемент
+    step_x, step_y - шаги, установленные для контроля построения новых точек, чтобы они не выходили за допустимые границы
+    top_k - кол-во обяхательно выбранных лучших маршрутов, этот параметр позволяет гарантировать не ухудшение качества маршрутов на следующих эпохах
     '''
-    start_pathes = [np.load(path) for path in os.listdir(pathes_dir) if path.endswith('.npy')]
+    start_pathes = [np.load(os.path.join(pathes_dir, path)) for path in os.listdir('/kaggle/input/weathedata') if path.endswith('.npy')]
     curr_individs = []
     
     for i, path in enumerate(start_pathes):
@@ -240,6 +309,7 @@ def GA(
             'time' : time,
             'dist' : distance,
             'fuel' : fuel,
+            'rang' : dist_coef * distance + time_coef * time + fuel_coef * fuel,
         })
 
     for epoch in range(epochs):
@@ -288,7 +358,7 @@ def GA(
         for path in tqdm(start_pathes, desc = f'epoch : {epoch + 1} Random_Walk_mutations, count_new pathes {len(new_pathes)}'):
             # Будем для каждого маршрутов создавать 2 его смещенных версии
             for _ in range(count_random_walk):
-                res_path = Random_Walk_mutations(path, p_move = p_move, noise_step = noise_step)
+                res_path = Random_Walk_mutations(path, p_move, start_point = start_point, end_point = end_point, noise_step = 5, step_x = step_x, step_y = step_y)
                 new_pathes.append(res_path)
 
         '''
@@ -317,31 +387,56 @@ def GA(
                     'time' : time,
                     'dist' : distance,
                     'fuel' : fuel,
+                    'rang' : dist_coef * distance + time_coef * time + fuel_coef * fuel,
                 })
                 dist_time_fuel_unique.add((distance, time, fuel))
-    
-        curr_individs.sort(key = lambda x: 1e-3 * x['dist'] / 9 + 1e-2 * x['time'] / 4 + 1e-2 * x['fuel'] / 5)
-        
-        # Сначала возьмем max_count_indeivids Лучших
-        curr_individs = curr_individs[:max_count_indeividuals]
-        time, dist, fuel = curr_individs[0]['time'], curr_individs[0]['dist'], curr_individs[0]['fuel']
-        print(f'epoch : {epoch + 1} \ntype_work : {type_work} \ntime : {time}; dist : {dist}; fuel : {fuel}\n\n')
+                
+        print(f'lost {len(curr_individs)} individs\n')
+        curr_individs.sort(key = lambda x: x['rang'])
 
-        best_path_epoch = np.array(curr_individs[0]['path'])
+        '''
+        Выберем top_k лучших, это гарантирует не понижение качества на каждой эпохе
+        '''
+        top_k_individs = curr_individs[:top_k]
+
+        '''
+        Применение селекции к полученным маршрутам
+        '''
+        curr_individs = tournament_selection(curr_individs[top_k:], num_winners = num_winners, tournament_size = tournament_size, seed = seed)
+        curr_individs = roulette_wheel_selection(curr_individs, num_select = max_count_indeividuals, replace = replace, seed = seed)
+        
+        curr_individs = top_k_individs + curr_individs
+        
+        curr_individs.sort(key = lambda x: x['rang'])
+        time, dist, fuel, rang = curr_individs[0]['time'], curr_individs[0]['dist'], curr_individs[0]['fuel'], curr_individs[0]['rang'],
+        print(f'epoch : {epoch + 1} \ntype_work : {type_work} \ntime : {time:.2f}; dist : {dist:.2f}; fuel : {fuel:.2f}, rang : {rang:.2f}\n\n')
+        
+        best_path_this_epoch = np.array(curr_individs[0]['path'])
         time = curr_individs[0]['time']
         dist = curr_individs[0]['dist']
         fuel = curr_individs[0]['fuel']
         
-        np.save(os.path.join(pathes_dir, f'GA_res_Epoch_{epoch+1}_type_{type_work}_time_{time:.2f}_dist_{dist:.2f}_fuel_{fuel:.2f}'), best_path_epoch)
+        np.save(f'GA_res_Epoch_{epoch+1}_type_{type_work}_time_{time:.1f}_dist_{dist:.2f}_fuel_{fuel:.2f}', best_path_this_epoch)
     return curr_individs
-
-def visual_path(
-    path, 
+    
+def visual_pathes_res(
+    res, 
     Ocean_map,
-    start_point, 
+    start_point,  
     end_point,
-    map_path = 'GA_path.html',
+    map_path = 'GA.html',
 ):
+    
+    Color = ['green', 'red', 'yellow', 'purple', 'orange', 'blue', 'pink']
+    count_pathes = int(0.5 * len(res))
+    if count_pathes < 3 and len(res) <= 3:
+        count_pathes = 3
+    if len(res) == 0:
+        return
+    if len(res) != 0 and count_pathes == 0:
+        count_pathes = 1
+    res.sort(key = lambda x : x['rang'])
+    
     m = folium.Map(tiles="cartodbpositron", world_copy_jump=True)
     
     group_1 = folium.FeatureGroup("first group").add_to(m)
@@ -351,14 +446,48 @@ def visual_path(
     folium.Marker((end_point.coords[0][1], end_point.coords[0][0]), tooltip="end_point").add_to(m)
     
     lines = folium.FeatureGroup("Lines").add_to(m)
-    folium.PolyLine([point[::-1] for point in path], color = 'red').add_to(lines)
+    for i in range(count_pathes):
+        path = res[i]['path']
+        folium.PolyLine([point[::-1] for point in path], color = Color[i % len(Coloe)]).add_to(lines)
+        
     folium.LayerControl().add_to(m)
     
     MousePosition().add_to(m)
-
     os.makedirs('results_visual', exist_ok=True)
     m.save(os.path.join('results_visual', map_path))
 
+
+config = {
+    'start_point' : Point((3, 55)),
+    'end_point' : Point((-80, 15)),
+    'pathes_dir' : 'results_pathes',
+    'Ocean_map' : Ocean_map,
+    'epochs' : 50,  
+    'max_count_indeividuals' : 25, 
+    'p_1_point' : 0.15, 
+    'p_2_point' : 0.15, 
+    'p_skip_candidate' : 0.9,
+    'p_move' : 0.75,
+    'p_change_point' : 0.5,
+    'good_dist' : 7,
+    'big_dist' : 200,
+    'eps' : 1e-6,
+    'noise_step' : 7.5,
+    'count_random_walk' : 25,
+    'curr_time_now' : None,
+    'weather_data' : None,
+    'seed' : None,
+    'dist_coef' : 0,
+    'time_coef' : 1e-2 / 4,
+    'fuel_coef' : 1e-2 / 8,
+    'num_winners' : 100,
+    'tournament_size' : 50,
+    'replace' : False,
+    'step_x' : 10,
+    'step_y' : 10,
+    'top_k' : 5,
+    
+}
 
 
 if __name__ == 'main':
@@ -368,20 +497,41 @@ if __name__ == 'main':
         'max_persent_speed',
         'max_persent_fuel',
     ]:
-         res = GA(
-             pathes_dir = config['pathes_dir'],
-             epochs = config['epochs'], 
-             type_work = type_work, 
-             max_count_indeividuals = config['max_count_indeividuals'], 
-             p_1_point = config['p_1_point'], 
-             p_2_point = config['p_2_point'], 
-             p_skip_candidate = config['p_skip_candidate'],
-         )
+        res = GA(
+            start_point = config['start_point'],
+            end_point = config['end_point'],
+            pathes_dir = confi['pathes_dir'],
+            type_work = type_work,
+            p_1_point = config['p_1_point'], 
+            p_2_point = config['p_2_point'], 
+            p_skip_candidate = config['p_skip_candidate'], 
+            good_dist = config['good_dist'], 
+            p_change_point = config['p_change_point'], 
+            p_move = config['p_move'], 
+            big_dist = config['big_dist'], 
+            epochs = config['epochs'],
+            max_count_indeividuals = config['max_count_indeividuals'], 
+            eps = config['eps'], 
+            noise_step = config['noise_step'], 
+            count_random_walk = config['curr_time_now'],
+            curr_time_now = config['curr_time_now'], 
+            weather_data = config['weather_data'],
+            dist_coef = config['dist_coef'],
+            time_coef = config['time_coef'],
+            fuel_coef = config['fuel_coef'],
+            num_winners = config['num_winners'],
+            tournament_size = config['tournament_size'],
+            seed = config['seed'],
+            replace = config['replace'],
+            step_x = config['step_x'], 
+            step_y = config['step_y'],
+            top_k = config['top_k'],
+        )
 
     visual_path(
-        path = res[0]['path'],
+        res = res, 
         Ocean_map = config['Ocean_map'],
-        start_point = config['start_point'], 
+        start_point = config['start_point'],
         end_point = config['end_point'],
-        map_path = 'GA_path.html',
+        map_path = f'{type_work}_GA.html', 
     )
