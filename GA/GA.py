@@ -244,6 +244,43 @@ def roulette_wheel_selection(curr_individs, num_select, replace = True, seed=Non
     selected_indices = np.random.choice(len(arr), size = num_select, replace = replace, p = probs)
     return [curr_individs[index] for index in selected_indices]
 
+def visual_pathes_res(
+    res, 
+    Ocean_map,
+    start_point,  
+    end_point,
+    map_path = 'GA.html',
+):
+    
+    Color = ['green', 'red', 'yellow', 'purple', 'orange', 'blue', 'pink']
+    count_pathes = int(0.5 * len(res))
+    if count_pathes < 3 and len(res) <= 3:
+        count_pathes = 3
+    if len(res) == 0:
+        return
+    if len(res) != 0 and count_pathes == 0:
+        count_pathes = 1
+    res.sort(key = lambda x : x['rang'])
+    
+    m = folium.Map(tiles="cartodbpositron", world_copy_jump=True)
+    
+    group_1 = folium.FeatureGroup("first group").add_to(m)
+    folium.GeoJson(Ocean_map).add_to(group_1)
+    
+    folium.Marker((start_point.coords[0][1], start_point.coords[0][0]), tooltip="start_point").add_to(m)
+    folium.Marker((end_point.coords[0][1], end_point.coords[0][0]), tooltip="end_point").add_to(m)
+    
+    lines = folium.FeatureGroup("Lines").add_to(m)
+    for i in range(count_pathes):
+        path = res[i]['path']
+        folium.PolyLine([point[::-1] for point in path], color = Color[i % len(Color)]).add_to(lines)
+        
+    folium.LayerControl().add_to(m)
+    
+    MousePosition().add_to(m)
+    os.makedirs('results_visual', exist_ok=True)
+    m.save(os.path.join('results_visual', map_path))
+
 def GA(
     start_point = start_point,
     end_point = end_point,
@@ -273,6 +310,7 @@ def GA(
     step_x = 10, 
     step_y = 10,
     top_k = 5,
+    map_file = 'based',
 ):
     '''
     Генетический алгоритм
@@ -417,45 +455,10 @@ def GA(
         fuel = curr_individs[0]['fuel']
         
         np.save(f'GA_res_Epoch_{epoch+1}_type_{type_work}_time_{time:.1f}_dist_{dist:.2f}_fuel_{fuel:.2f}', best_path_this_epoch)
+
+        visual_pathes_res(curr_individs, Ocean_map, start_point,  end_point, map_path = f'{type_work}_epoch_{epoch + 1}_{map_file}_GA.html')
     return curr_individs
     
-def visual_pathes_res(
-    res, 
-    Ocean_map,
-    start_point,  
-    end_point,
-    map_path = 'GA.html',
-):
-    
-    Color = ['green', 'red', 'yellow', 'purple', 'orange', 'blue', 'pink']
-    count_pathes = int(0.5 * len(res))
-    if count_pathes < 3 and len(res) <= 3:
-        count_pathes = 3
-    if len(res) == 0:
-        return
-    if len(res) != 0 and count_pathes == 0:
-        count_pathes = 1
-    res.sort(key = lambda x : x['rang'])
-    
-    m = folium.Map(tiles="cartodbpositron", world_copy_jump=True)
-    
-    group_1 = folium.FeatureGroup("first group").add_to(m)
-    folium.GeoJson(Ocean_map).add_to(group_1)
-    
-    folium.Marker((start_point.coords[0][1], start_point.coords[0][0]), tooltip="start_point").add_to(m)
-    folium.Marker((end_point.coords[0][1], end_point.coords[0][0]), tooltip="end_point").add_to(m)
-    
-    lines = folium.FeatureGroup("Lines").add_to(m)
-    for i in range(count_pathes):
-        path = res[i]['path']
-        folium.PolyLine([point[::-1] for point in path], color = Color[i % len(Color)]).add_to(lines)
-        
-    folium.LayerControl().add_to(m)
-    
-    MousePosition().add_to(m)
-    os.makedirs('results_visual', exist_ok=True)
-    m.save(os.path.join('results_visual', map_path))
-
 
 config = {
     'start_point' : Point((3, 55)),
@@ -526,6 +529,7 @@ if __name__ == 'main':
             step_x = config['step_x'], 
             step_y = config['step_y'],
             top_k = config['top_k'],
+            map_file = 'based',
         )
 
     visual_path(
@@ -533,5 +537,5 @@ if __name__ == 'main':
         Ocean_map = config['Ocean_map'],
         start_point = config['start_point'],
         end_point = config['end_point'],
-        map_path = f'{type_work}_GA.html', 
+        map_path = f'FINAL_{type_work}_GA.html',
     )
