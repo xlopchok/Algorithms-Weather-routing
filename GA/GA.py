@@ -448,7 +448,7 @@ def visual_pathes_res(
     lines = folium.FeatureGroup("Lines").add_to(m)
     for i in range(count_pathes):
         path = res[i]['path']
-        folium.PolyLine([point[::-1] for point in path], color = Color[i % len(Coloe)]).add_to(lines)
+        folium.PolyLine([point[::-1] for point in path], color = Color[i % len(Color)]).add_to(lines)
         
     folium.LayerControl().add_to(m)
     
