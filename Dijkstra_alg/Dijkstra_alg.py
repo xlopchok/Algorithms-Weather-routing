@@ -183,7 +183,7 @@ def decstra_path(
             G.add_edge(index1, index2, weight = cost)
     
     # Находим кратчайший путь
-    shortest_path = nx.shortest_path(G, source=start_index, target=end_index, weight='weight')
+    shortest_path = nx.dijkstra_path(G, source=start_index, target=end_index, weight='weight')
     
     time = sum([
         desript_graph[shortest_path[i]][shortest_path[i+1]]['distance'] / desript_graph[shortest_path[i]][shortest_path[i+1]]['speed']
